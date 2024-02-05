@@ -8,7 +8,7 @@
       <el-button type="primary" @click="moveNodeByHash">move</el-button>
       <el-button type="primary" @click="exportMethod">export</el-button>
     </div>
-    <el-scrollbar class="h-[calc(100vh-140px)] w-full">
+    <el-scrollbar class="h-[calc(100vh-540px)] w-full">
       <el-tree
         ref="treeRef"
         class="w-full min-w-350px p-b-20px"
@@ -94,7 +94,6 @@ const renderLabel = (
   return h(
     "div",
     {
-
       class: "flex-row-46 w-full p-y-5px",
     },
     h("span", { innerHTML: createLabel(data) }),

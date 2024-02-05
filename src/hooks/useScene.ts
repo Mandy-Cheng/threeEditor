@@ -10,10 +10,12 @@ export default class ThreeScene {
   controls: OrbitControls;
   light: THREE.AmbientLight;
   container: HTMLElement;
-  gltf: {};
-  constructor(options: { container: HTMLElement }) {
+  nodeTree: Array<any>[] = [];
+  gltf: any;
+  constructor(options: { container: HTMLElement; gltf: any }) {
     this.container = options.container;
     this.scene = new THREE.Scene();
+    this.gltf = options.gltf;
     this.camera = new THREE.PerspectiveCamera(
       75,
       this.container.clientWidth / this.container.clientHeight,
@@ -48,15 +50,13 @@ export default class ThreeScene {
     this.renderer?.render(this.scene, this.camera);
     requestAnimationFrame((this.render as any).bind(this));
   }
-  loadModel() {
+  loadModel(url: string = this.gltf) {
     const loader = new GLTFLoader();
     return new Promise<any>((resolve, reject) => {
       loader.load(
-        "/model/BJ_xswnq_station/bj-xswnqzhan4.glb",
+        url,
         (gltf: any) => {
-          const box = new THREE.Box3().setFromObject(gltf.scene);
           // 计算模型中心点
-          const center = box.getCenter(new THREE.Vector3());
           this.scene.add(gltf.scene);
           this.render();
           this.nodeTree = gltf.scene.children;

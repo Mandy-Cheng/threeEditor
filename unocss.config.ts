@@ -60,7 +60,6 @@ const presetFlex = definePreset(() => {
         ([, direction, number]) => ({
           display: "flex",
           "flex-direction": direction,
-          "flex-wrap": "wrap",
           "justify-content": area(Number(number))[0],
           "align-items": area(Number(number))[1],
         }),

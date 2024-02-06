@@ -1,6 +1,8 @@
 <template>
-  <n-space vertical class="p-y-20px p-x-10px box-border w-340px">
-    <el-input v-model="pattern" placeholder="搜索" />
+  <n-space
+    vertical
+    class="p-y-20px p-x-10px box-border w-full w-min-300px zIndex-999"
+  >
     <div>
       <el-button type="primary" @click="changeByHash">ChangeByHash</el-button>
       <el-button type="primary" @click="resetTree">reset</el-button>
@@ -8,16 +10,17 @@
       <el-button type="primary" @click="moveNodeByHash">move</el-button>
       <el-button type="primary" @click="exportMethod">export</el-button>
     </div>
-    <el-scrollbar class="h-[calc(100vh-540px)] w-full">
+    <el-input v-model="pattern" placeholder="搜索" />
+    <el-scrollbar class="h-[calc(100vh-300px)] w-full">
       <el-tree
         ref="treeRef"
-        class="w-full min-w-350px p-b-20px"
+        class="w-full p-b-20px"
         draggable
         :data="treeDataIn"
         node-key="id"
         :renderContent="renderLabel"
         :filter-node-method="filterNode"
-        :default-expanded-keys="[12]"
+        :default-expanded-keys="defaultExpandedKeys"
       >
         <template #default="{ node, data }">
           <span class="custom-tree-node">
@@ -32,12 +35,12 @@
   </n-space>
 </template>
 <script lang="ts" setup>
-import { ref, toRef, defineProps, watch } from "vue";
+import { ref, toRef, defineProps, watch, withModifiers, triggerRef } from "vue";
 import type { TreeNodeData } from "element-plus/es/components/tree/src/tree.type";
 import { get } from "@runafe/platform-share";
-import { ElTree } from "element-plus";
+import { ElTree, ElIcon } from "element-plus";
 import useModel from "../hooks/useModel";
-
+import { EyeOutline, EyeOffOutline, ArrowUp } from "@vicons/ionicons5";
 const { changeNameByHash, moveNodeGroupByName, addGroup, exportFunc } =
   useModel();
 const props = withDefaults(
@@ -48,8 +51,9 @@ const props = withDefaults(
 );
 const treeRef = ref<InstanceType<typeof ElTree>>();
 const treeDataOrigin = props.treeData;
-
+const defaultExpandedKeys = ref<number[]>([]);
 let treeDataIn = toRef(props, "treeData");
+
 const pattern = ref("");
 const filterNode = (pattern: string, node: TreeNodeData) => {
   if (!pattern) return true;
@@ -77,9 +81,6 @@ const createLabel = (node: TreeNodeData) => {
     })
     .join("");
 };
-const rename = (data: TreeNodeData) => {
-  data.name = "Append " + data.name;
-};
 const toggleVisible = (data: TreeNodeData) => {
   data.visible = !data.visible;
 };
@@ -97,17 +98,36 @@ const renderLabel = (
       class: "flex-row-46 w-full p-y-5px",
     },
     h("span", { innerHTML: createLabel(data) }),
-    h(
-      "span",
-      null,
+    h("div", { class: "flex-row-46" }, [
+      data.name === "Scene"
+        ? null
+        : h(
+            ElIcon,
+            {
+              class: "mr-40px color-#4194fc",
+              onClick: withModifiers(
+                () => moveTop(data, treeDataIn.value[0].children as any[]),
+                ["stop", "prevent"]
+              ),
+            },
+            {
+              default: () => h(ArrowUp),
+            }
+          ),
       h(
-        "a",
+        ElIcon,
         {
-          onClick: () => toggleVisible(data),
+          class: "mr-40px color-#4194fc",
+          onClick: withModifiers(
+            () => toggleVisible(data),
+            ["stop", "prevent"]
+          ),
         },
-        "Append "
-      )
-    )
+        {
+          default: () => h(data.visible ? EyeOutline : EyeOffOutline),
+        }
+      ),
+    ])
   );
 };
 
@@ -129,7 +149,6 @@ const resetTree = () => {
 const moveNodeByHash = () => {
   const names = Object.values(hash);
   names.forEach((name) => {
-    console.log(name);
     moveNodeGroupByName(name, "Node", treeDataIn.value[0]);
   });
 };
@@ -140,9 +159,25 @@ const add = () => {
   addGroup("Node", treeDataIn.value[0]);
 };
 
+const moveTop = (data: TreeNodeData, array: any[]) => {
+  const index = array.findIndex((item: any) => item.id === data.id);
+  if (index === 0) return;
+  const item = array.splice(index, 1);
+  array.unshift(item[0]);
+  console.log(array);
+  triggerRef(treeDataIn);
+};
+
 watch(pattern, (val) => {
   treeRef.value!.filter(val);
 });
+
+watch(
+  () => props.treeData,
+  (val) => {
+    defaultExpandedKeys.value = [val[0]?.id];
+  }
+);
 </script>
 <style scoped>
 .el-scrollbar__wrap {

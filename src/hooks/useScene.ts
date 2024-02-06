@@ -2,7 +2,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-
+import { useResizeObserver } from "@vueuse/core";
 export default class ThreeScene {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
@@ -42,6 +42,12 @@ export default class ThreeScene {
     this.gltf = await this.loadModel();
     this.initRaycaster();
     this.container.appendChild(this.renderer.domElement);
+    useResizeObserver(this.container, () => {
+      this.resize();
+    });
+    window.addEventListener("resize", () => {
+      this.resize();
+    });
     return new Promise<any>((resolve) => {
       resolve({ nodeTree: this.gltf.scenes });
     });
@@ -100,5 +106,15 @@ export default class ThreeScene {
         this.scene.add(helper);
       }
     });
+  }
+  // resize
+  resize() {
+    this.camera.aspect =
+      this.container.clientWidth / this.container.clientHeight;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(
+      this.container.clientWidth,
+      this.container.clientHeight
+    );
   }
 }

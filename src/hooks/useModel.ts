@@ -75,23 +75,21 @@ export function moveNodeGroupByName(
 ) {
   const group = scene.getObjectByName(groupName);
   const nodes = scene.getObjectsByProperty("name", nodeName);
-  console.log("men", nodes);
   if (group && nodes) {
     nodes.forEach((node) => {
       group.add(node);
       scene.remove(node);
     });
-
     scene.add(group);
   } else {
     console.error("未找到group或者node");
   }
 }
 
-export function addGroup(name?: string, scene: THREE.Group) {
+export function addGroup(name?: string, scene?: THREE.Group) {
   const group = new THREE.Group();
   group.name = name || "group";
-  scene.add(group);
+  scene?.add(group);
 }
 
 export default function useModel() {

@@ -11,7 +11,6 @@ const { getModelFromIndexDb } = useIndexedDB();
 
 async function init() {
   const gltf = await getModelFromIndexDb("xsw");
-  console.log(gltf);
   if (gltf) {
     const threeScene = new ThreeScene({
       container: containerRef.value,
@@ -27,22 +26,17 @@ async function init() {
 onMounted(async () => {
   init();
 });
-
-
-
 </script>
 
 <template>
-  <div class="flex-row-1 h-full">
-    <div class="flex-column-2">
-      <sc-tree :treeData="treeData"></sc-tree>
+  <div class="flex-row-1 h-100vh">
+    <div class="flex-column-2 w-35% b-r b-coolGray h-full">
       <sc-upload @load="init"></sc-upload>
+      <sc-tree :treeData="treeData"></sc-tree>
     </div>
-    <div
-      id="three_container"
-      ref="containerRef"
-      class="w-[calc(100vw-360px)] h-100vh"
-    ></div>
+    <div class="w-65% h-100vh">
+      <div id="three_container" ref="containerRef" class="w-100% h-100vh"></div>
+    </div>
   </div>
 </template>
 

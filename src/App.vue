@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import ThreeScene from "./hooks/useScene";
-import { ref, onMounted } from "vue";
-import ScTree from "./components/ScTree.vue";
-import ScUpload from "./components/ScUpload.vue";
 import useIndexedDB from "@/hooks/useIndexDb";
-
 const treeData = ref<any>([]);
 const containerRef = ref<any>(null);
 const { getModelFromIndexDb } = useIndexedDB();

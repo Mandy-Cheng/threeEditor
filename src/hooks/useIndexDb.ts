@@ -49,7 +49,6 @@ function getModelFromIndexDb(modelName: string) {
         if (modelData?.raw) {
           const url = window.URL.createObjectURL(modelData?.raw);
           loader.load(url, (gltf: any) => {
-            console.log(gltf);
             resolve(url);
           });
         }

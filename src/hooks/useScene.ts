@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { useResizeObserver } from "@vueuse/core";
+import { RoomEnvironment } from "three/examples/jsm/Addons.js";
 export default class ThreeScene {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
@@ -42,6 +43,9 @@ export default class ThreeScene {
     this.gltf = await this.loadModel();
     this.initRaycaster();
     this.container.appendChild(this.renderer.domElement);
+    this.loadEnv()
+    // this.addAxesHelper()
+    this.addGridHelper()
     useResizeObserver(this.container, () => {
       this.resize();
     });
@@ -66,7 +70,6 @@ export default class ThreeScene {
           this.scene.add(gltf.scene);
           this.render();
           this.nodeTree = gltf.scene.children;
-          console.log(gltf);
           resolve(gltf);
         },
         undefined,
@@ -116,5 +119,21 @@ export default class ThreeScene {
       this.container.clientWidth,
       this.container.clientHeight
     );
+  }
+  // loadEnv
+  loadEnv() {
+    const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+    const env = new RoomEnvironment();
+    this.scene.environment = pmremGenerator.fromScene(env, 0.04).texture;
+  }
+  // add AxesHelper 辅助坐标系
+  addAxesHelper() {
+    const axesHelper = new THREE.AxesHelper(50);
+    this.scene.add(axesHelper);
+  }
+  // addGridHelper 辅助网格
+  addGridHelper() {
+    const gridHelper = new THREE.GridHelper(40, 40);
+    this.scene.add(gridHelper);
   }
 }

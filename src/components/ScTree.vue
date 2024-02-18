@@ -5,12 +5,24 @@
   >
     <div>
       <el-button type="primary" @click="changeByHash">ChangeByHash</el-button>
-      <el-button type="primary" @click="resetTree">reset</el-button>
       <el-button type="primary" @click="add">addGroup</el-button>
       <el-button type="primary" @click="moveNodeByHash">move</el-button>
       <el-button type="primary" @click="exportMethod">export</el-button>
+      <el-button type="primary" @click="resetTree">reset</el-button>
     </div>
-    <el-input v-model="pattern" placeholder="搜索" />
+    <el-input v-model="pattern" placeholder="搜索">
+      <template #prepend>
+        <el-select
+          v-model="filterType"
+          placeholder="Select"
+          style="width: 115px"
+          @change="selectChange"
+        >
+          <el-option label="Object3D" value="1" />
+          <el-option label="Material" value="2" />
+        </el-select>
+      </template>
+    </el-input>
     <el-scrollbar class="h-[calc(100vh-300px)] w-full">
       <el-tree
         ref="treeRef"
@@ -21,6 +33,7 @@
         :renderContent="renderLabel"
         :filter-node-method="filterNode"
         :default-expanded-keys="defaultExpandedKeys"
+        @node-click="handleNodeClick"
       >
         <template #default="{ node, data }">
           <span class="custom-tree-node">
@@ -32,13 +45,13 @@
         </template>
       </el-tree>
     </el-scrollbar>
+    <sc-property :property="currentNode" />
   </n-space>
 </template>
 <script lang="ts" setup>
-import { ref, toRef, defineProps, watch, withModifiers, triggerRef } from "vue";
+import { withModifiers } from "vue";
 import type { TreeNodeData } from "element-plus/es/components/tree/src/tree.type";
-import { get } from "@runafe/platform-share";
-import { ElTree, ElIcon } from "element-plus";
+import { get, clone } from "@runafe/platform-share";
 import useModel from "../hooks/useModel";
 import { EyeOutline, EyeOffOutline, ArrowUp } from "@vicons/ionicons5";
 const { changeNameByHash, moveNodeGroupByName, addGroup, exportFunc } =
@@ -50,16 +63,13 @@ const props = withDefaults(
   { treeData: () => [] }
 );
 const treeRef = ref<InstanceType<typeof ElTree>>();
-const treeDataOrigin = props.treeData;
 const defaultExpandedKeys = ref<number[]>([]);
 let treeDataIn = toRef(props, "treeData");
-
+let treeDataOrigin = [] as THREE.Group[];
+const currentNode = ref<TreeNodeData[]>([]);
+const filterType = ref("1");
 const pattern = ref("");
-const filterNode = (pattern: string, node: TreeNodeData) => {
-  if (!pattern) return true;
-  const name = node.name as string;
-  return name.includes(pattern);
-};
+
 const colorHash = {
   Other: { type: "groupOrObject3D", color: "#8888ee", alias: "" },
   Geometry: { type: "geometry", color: "#FF0000", alias: "geometry" },
@@ -105,10 +115,7 @@ const renderLabel = (
             ElIcon,
             {
               class: "mr-40px color-#4194fc",
-              onClick: withModifiers(
-                () => moveTop(data, treeDataIn.value[0].children as any[]),
-                ["stop", "prevent"]
-              ),
+              onClick: withModifiers(() => moveTop(data), ["stop", "prevent"]),
             },
             {
               default: () => h(ArrowUp),
@@ -140,32 +147,58 @@ const hash = {
   caopi: "草皮",
 };
 
+const filterNode = (pattern: string, node: TreeNodeData) => {
+  if (!pattern) return true;
+  const n_name = node.name as string;
+  const m_name = node.material?.name as string;
+  switch (filterType.value) {
+    case "1":
+      return n_name.includes(pattern);
+    case "2":
+      if (!m_name) return false;
+      return m_name.includes(pattern);
+    default:
+      return n_name.includes(pattern);
+  }
+};
+
+const selectChange = () => {
+  pattern.value = "";
+};
+
 const changeByHash = () => {
   changeNameByHash(hash, treeDataIn.value[0]);
 };
+
 const resetTree = () => {
+  console.log("reset");
   treeDataIn.value = treeDataOrigin;
 };
+
+const handleNodeClick = (data: TreeNodeData) => {
+  console.log(data);
+  currentNode.value = [data];
+};
+
 const moveNodeByHash = () => {
   const names = Object.values(hash);
   names.forEach((name) => {
     moveNodeGroupByName(name, "Node", treeDataIn.value[0]);
   });
 };
+
 const exportMethod = () => {
   exportFunc(treeDataIn.value[0]);
 };
+
 const add = () => {
   addGroup("Node", treeDataIn.value[0]);
 };
 
-const moveTop = (data: TreeNodeData, array: any[]) => {
-  const index = array.findIndex((item: any) => item.id === data.id);
-  if (index === 0) return;
-  const item = array.splice(index, 1);
-  array.unshift(item[0]);
-  console.log(array);
-  triggerRef(treeDataIn);
+// 置顶
+const moveTop = (data: any) => {
+  treeRef.value?.remove(data.id);
+  treeDataIn.value[0].children.unshift(data);
 };
 
 watch(pattern, (val) => {
@@ -177,6 +210,17 @@ watch(
   (val) => {
     defaultExpandedKeys.value = [val[0]?.id];
   }
+);
+
+const stopWatch = watch(
+  () => props.treeData,
+  (newVal, oldVal) => {
+    if (newVal.length > 0 && newVal !== oldVal) {
+      treeDataOrigin = clone(newVal);
+      if (stopWatch) stopWatch(); // 停止监听
+    }
+  },
+  { deep: true, immediate: true }
 );
 </script>
 <style scoped>

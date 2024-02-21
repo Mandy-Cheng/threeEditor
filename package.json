@@ -17,7 +17,8 @@
     "seemly": "^0.3.8",
     "three": "^0.160.1",
     "unocss": "^0.58.4",
-    "vue": "^3.3.11"
+    "vue": "^3.3.11",
+    "vue-router": "^4.2.5"
   },
   "devDependencies": {
     "@types/node": "^20.11.16",

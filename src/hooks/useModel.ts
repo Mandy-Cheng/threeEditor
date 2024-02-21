@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 
+const type = "glb";
+
 const saveArrayBuffer = (buffer: any, filename: any) => {
   // 将二进制数据保存为文件
   const blob = new Blob([buffer], { type: "application/octet-stream" });
@@ -25,8 +27,6 @@ const saveString = (text: any, filename: any) => {
   console.log("导出成功");
 };
 
-const type = "glb";
-
 export function exportFunc(scene: THREE.Group) {
   // 导出模型
   const exporter = new GLTFExporter();
@@ -40,7 +40,6 @@ export function exportFunc(scene: THREE.Group) {
     maxTextureUnits: 16, // 最大纹理单元
     optimizeForCaching: true, // 是否优化缓存
     includeCustomExtensions: true, // 是否包括自定义扩展
-
   };
   exporter.parse(
     scene,
@@ -60,7 +59,7 @@ export function exportFunc(scene: THREE.Group) {
 }
 
 export function changeNameByHash(hash: Object, scene: THREE.Group) {
-  const map = new Map(Object.entries(hash));
+  const map = new Map(hash.map((item) => [item.key, item.value]));
   scene.traverse((child: any) => {
     if (child.material && map.has(child.material.name)) {
       child.parent.name = map.get(child.material.name);
@@ -92,11 +91,16 @@ export function addGroup(name?: string, scene?: THREE.Group) {
   scene?.add(group);
 }
 
+function setSelectedObject(object: any, outlinePass: any) {
+  outlinePass.selectedObjects = object ? [object] : [];
+}
+
 export default function useModel() {
   return {
     exportFunc,
     changeNameByHash,
     moveNodeGroupByName,
     addGroup,
+    setSelectedObject,
   };
 }

@@ -3,12 +3,40 @@
     vertical
     class="p-y-20px p-x-10px box-border w-full w-min-300px zIndex-999"
   >
-    <div>
-      <el-button type="primary" @click="changeByHash">ChangeByHash</el-button>
-      <el-button type="primary" @click="add">addGroup</el-button>
-      <el-button type="primary" @click="moveNodeByHash">move</el-button>
-      <el-button type="primary" @click="exportMethod">export</el-button>
-      <el-button type="primary" @click="resetTree">reset</el-button>
+    <div class="h-150px b-b-1px b-#dcdfe6 b-b-dashed pb-10px">
+      <el-scrollbar>
+        <div class="flex-row-46">
+          <div>
+            <n-dynamic-input
+              v-model:value="hash"
+              preset="pair"
+              key-placeholder="材料名称"
+              value-placeholder="修改名称"
+              size="mini"
+            />
+          </div>
+          <div>
+            <el-button
+              type="primary"
+              @click="changeByHash"
+              class="ml-10px mb-10px"
+              >ChangeName</el-button
+            >
+            <el-button type="primary" @click="add" class="mb-10px"
+              >addGroup</el-button
+            >
+            <el-button type="primary" @click="moveNodeByHash" class="mb-10px"
+              >move</el-button
+            >
+            <el-button type="primary" @click="exportMethod" class="mb-10px"
+              >export</el-button
+            >
+            <el-button type="primary" @click="resetTree" class="mb-10px"
+              >reset</el-button
+            >
+          </div>
+        </div>
+      </el-scrollbar>
     </div>
     <el-input v-model="pattern" placeholder="搜索">
       <template #prepend>
@@ -23,48 +51,62 @@
         </el-select>
       </template>
     </el-input>
-    <el-scrollbar class="h-[calc(100vh-300px)] w-full">
-      <el-tree
-        ref="treeRef"
-        class="w-full p-b-20px"
-        draggable
-        :data="treeDataIn"
-        node-key="id"
-        :renderContent="renderLabel"
-        :filter-node-method="filterNode"
-        :default-expanded-keys="defaultExpandedKeys"
-        @node-click="handleNodeClick"
-      >
-        <template #default="{ node, data }">
-          <span class="custom-tree-node">
-            <span>{{ node.label }}</span>
-            <span>
-              <a @click="toggleVisible(data)"> rename </a>
+    <div class="h-[calc(100vh-500px)] w-full b-b-1px b-#dcdfe6 b-b-dashed">
+      <el-scrollbar>
+        <el-tree
+          ref="treeRef"
+          class="w-full p-b-20px"
+          draggable
+          :data="treeDataIn"
+          node-key="id"
+          :renderContent="renderLabel"
+          :filter-node-method="filterNode"
+          :default-expanded-keys="defaultExpandedKeys"
+          @node-click="handleNodeClick"
+        >
+          <template #default="{ node, data }">
+            <span class="custom-tree-node">
+              <span>{{ node.label }}</span>
+              <span>
+                <a @click="toggleVisible(data)"> rename </a>
+              </span>
             </span>
-          </span>
-        </template>
-      </el-tree>
-    </el-scrollbar>
+          </template>
+        </el-tree>
+      </el-scrollbar>
+    </div>
     <sc-property :property="currentNode" />
   </n-space>
 </template>
 <script lang="ts" setup>
 import { withModifiers } from "vue";
 import type { TreeNodeData } from "element-plus/es/components/tree/src/tree.type";
-import { get, clone } from "@runafe/platform-share";
+import { get } from "@runafe/platform-share";
 import useModel from "../hooks/useModel";
-import { EyeOutline, EyeOffOutline, ArrowUp } from "@vicons/ionicons5";
-const { changeNameByHash, moveNodeGroupByName, addGroup, exportFunc } =
-  useModel();
+import {
+  EyeOutline,
+  EyeOffOutline,
+  ArrowUp,
+  TrashOutline,
+} from "@vicons/ionicons5";
+const {
+  changeNameByHash,
+  moveNodeGroupByName,
+  addGroup,
+  exportFunc,
+  setSelectedObject,
+} = useModel();
 const props = withDefaults(
   defineProps<{
     treeData: THREE.Group[];
+    outlinePass: any;
   }>(),
-  { treeData: () => [] }
+  { treeData: () => [], outlinePass: () => {} }
 );
 const treeRef = ref<InstanceType<typeof ElTree>>();
 const defaultExpandedKeys = ref<number[]>([]);
 let treeDataIn = toRef(props, "treeData");
+let outlinePassIn = toRef(props, "outlinePass");
 let treeDataOrigin = [] as THREE.Group[];
 const currentNode = ref<TreeNodeData[]>([]);
 const filterType = ref("1");
@@ -111,20 +153,41 @@ const renderLabel = (
     h("div", { class: "flex-row-46" }, [
       data.name === "Scene"
         ? null
-        : h(
-            ElIcon,
-            {
-              class: "mr-40px color-#4194fc",
-              onClick: withModifiers(() => moveTop(data), ["stop", "prevent"]),
-            },
-            {
-              default: () => h(ArrowUp),
-            }
-          ),
+        : [
+            h(
+              ElIcon,
+              {
+                class: "mr-10px",
+                color: "#4194fc",
+                onClick: withModifiers(
+                  () => moveTop(data),
+                  ["stop", "prevent"]
+                ),
+              },
+              {
+                default: () => h(ArrowUp),
+              }
+            ),
+            h(
+              ElIcon,
+              {
+                class: "mr-10px",
+                color: "#4194fc",
+                onClick: withModifiers(
+                  () => deleteNode(data),
+                  ["stop", "prevent"]
+                ),
+              },
+              {
+                default: () => h(TrashOutline),
+              }
+            ),
+          ],
       h(
         ElIcon,
         {
-          class: "mr-40px color-#4194fc",
+          class: "mr-20px",
+          color: "#4194fc",
           onClick: withModifiers(
             () => toggleVisible(data),
             ["stop", "prevent"]
@@ -138,13 +201,31 @@ const renderLabel = (
   );
 };
 
-const hash = {
-  dingmian: "顶面",
-  dimian: "地面",
-  shuini: "外墙",
-  // hui: "门",
-  boli: "窗",
-  caopi: "草皮",
+const hash = ref([
+  {
+    key: "dingmian",
+    value: "顶面",
+  },
+  {
+    key: "dimian",
+    value: "地面",
+  },
+  {
+    key: "shuini",
+    value: "外墙",
+  },
+  {
+    key: "boli",
+    value: "窗",
+  },
+  {
+    key: "caopi",
+    value: "草皮",
+  },
+]);
+
+const deleteNode = (data: TreeNodeData) => {
+  treeRef.value?.remove(data.id);
 };
 
 const filterNode = (pattern: string, node: TreeNodeData) => {
@@ -167,7 +248,7 @@ const selectChange = () => {
 };
 
 const changeByHash = () => {
-  changeNameByHash(hash, treeDataIn.value[0]);
+  changeNameByHash(hash.value, treeDataIn.value[0]);
 };
 
 const resetTree = () => {
@@ -176,12 +257,13 @@ const resetTree = () => {
 };
 
 const handleNodeClick = (data: TreeNodeData) => {
-  console.log(data);
   currentNode.value = [data];
+  setSelectedObject(data, outlinePassIn.value);
 };
 
 const moveNodeByHash = () => {
-  const names = Object.values(hash);
+  // 提取hash每一项的value成数组
+  const names = hash.value.map((item) => item.value);
   names.forEach((name) => {
     moveNodeGroupByName(name, "Node", treeDataIn.value[0]);
   });
@@ -212,16 +294,16 @@ watch(
   }
 );
 
-const stopWatch = watch(
-  () => props.treeData,
-  (newVal, oldVal) => {
-    if (newVal.length > 0 && newVal !== oldVal) {
-      treeDataOrigin = clone(newVal);
-      if (stopWatch) stopWatch(); // 停止监听
-    }
-  },
-  { deep: true, immediate: true }
-);
+// const stopWatch = watch(
+//   () => props.treeData,
+//   (newVal, oldVal) => {
+//     if (newVal.length > 0 && newVal !== oldVal) {
+//       treeDataOrigin = clone(newVal);
+//       if (stopWatch) stopWatch(); // 停止监听
+//     }
+//   },
+//   { deep: true, immediate: true }
+// );
 </script>
 <style scoped>
 .el-scrollbar__wrap {

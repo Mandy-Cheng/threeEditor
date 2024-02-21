@@ -1,6 +1,5 @@
 <template>
   <el-upload
-    class="upload-demo"
     drag
     action="#"
     multiple="false"
@@ -18,7 +17,6 @@
   </el-upload>
 </template>
 <script lang="ts" setup>
-import { CloudUploadOutline } from "@vicons/ionicons5";
 import { ref, toRaw, watch } from "vue";
 import useIndexedDB from "@/hooks/useIndexDb";
 const fileList = ref<any>([]);
@@ -30,7 +28,6 @@ function handleSuccess(response: any, file: any, fileList: any) {
 }
 
 function handleChange() {
-  console.log(arguments);
   fileList.value = arguments[1];
   if (fileList.value.length === 0) {
     console.log("没有文件可以上传");

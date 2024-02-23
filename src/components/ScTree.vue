@@ -61,6 +61,7 @@
           node-key="id"
           :renderContent="renderLabel"
           :filter-node-method="filterNode"
+          :highlight-current="true"
           :default-expanded-keys="defaultExpandedKeys"
           @node-click="handleNodeClick"
         >
@@ -89,13 +90,8 @@ import {
   ArrowUp,
   TrashOutline,
 } from "@vicons/ionicons5";
-const {
-  changeNameByHash,
-  moveNodeGroupByName,
-  addGroup,
-  exportFunc,
-  setSelectedObject,
-} = useModel();
+const { changeNameByHash, moveNodeGroupByName, addGroup, exportFunc } =
+  useModel();
 const props = withDefaults(
   defineProps<{
     treeData: THREE.Group[];
@@ -103,10 +99,10 @@ const props = withDefaults(
   }>(),
   { treeData: () => [], outlinePass: () => {} }
 );
+const emit = defineEmits(["select"]);
 const treeRef = ref<InstanceType<typeof ElTree>>();
 const defaultExpandedKeys = ref<number[]>([]);
 let treeDataIn = toRef(props, "treeData");
-let outlinePassIn = toRef(props, "outlinePass");
 let treeDataOrigin = [] as THREE.Group[];
 const currentNode = ref<TreeNodeData[]>([]);
 const filterType = ref("1");
@@ -118,6 +114,7 @@ const colorHash = {
   Mesh: { type: "mesh", color: "#aaeeaa", alias: "material" },
 };
 const colorEntries = Object.entries(colorHash);
+
 const createLabel = (node: TreeNodeData) => {
   const spans = colorEntries.map((item) => {
     const name = get(node, [`${item[1]?.alias}`, "name"], "") as string;
@@ -133,9 +130,20 @@ const createLabel = (node: TreeNodeData) => {
     })
     .join("");
 };
+
 const toggleVisible = (data: TreeNodeData) => {
-  data.visible = !data.visible;
+  traverseVisible(data);
 };
+
+const traverseVisible = (data: TreeNodeData) => {
+  data.visible = !data.visible;
+  if (data.children) {
+    data.children.forEach((item: TreeNodeData) => {
+      traverseVisible(item);
+    });
+  }
+};
+
 const renderLabel = (
   h: any,
   {
@@ -148,6 +156,7 @@ const renderLabel = (
     "div",
     {
       class: "flex-row-46 w-full p-y-5px",
+      id: data.id,
     },
     h("span", { innerHTML: createLabel(data) }),
     h("div", { class: "flex-row-46" }, [
@@ -258,7 +267,12 @@ const resetTree = () => {
 
 const handleNodeClick = (data: TreeNodeData) => {
   currentNode.value = [data];
-  setSelectedObject(data, outlinePassIn.value);
+  console.log("select", data);
+  emit("select", data);
+};
+
+const setCheckedNodes = (node: TreeNodeData) => {
+  currentNode.value = [node];
 };
 
 const moveNodeByHash = () => {
@@ -294,16 +308,10 @@ watch(
   }
 );
 
-// const stopWatch = watch(
-//   () => props.treeData,
-//   (newVal, oldVal) => {
-//     if (newVal.length > 0 && newVal !== oldVal) {
-//       treeDataOrigin = clone(newVal);
-//       if (stopWatch) stopWatch(); // 停止监听
-//     }
-//   },
-//   { deep: true, immediate: true }
-// );
+defineExpose({
+  treeRef,
+  setCheckedNodes,
+});
 </script>
 <style scoped>
 .el-scrollbar__wrap {

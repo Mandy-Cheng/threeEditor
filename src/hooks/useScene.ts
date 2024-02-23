@@ -1,14 +1,17 @@
 // 创建threejs类 包括场景、相机、渲染器、光源、控制器等
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { useResizeObserver } from "@vueuse/core";
-import { RoomEnvironment } from "three/examples/jsm/Addons.js";
+import { OutlinePass, RoomEnvironment } from "three/examples/jsm/Addons.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import useComposer from "@/hooks/useComposer.ts";
 import useModel from "@/hooks/useModel.ts";
+import useTree from "@/hooks/useTree.ts";
 const { outlinePass } = useComposer();
 const { setSelectedObject } = useModel();
+const { setCheckedNodes } = useTree();
 
 export default class ThreeScene {
   scene: THREE.Scene;
@@ -16,37 +19,28 @@ export default class ThreeScene {
   renderer: THREE.WebGLRenderer;
   controls: OrbitControls;
   container: HTMLElement;
+  tree?: InstanceType<typeof ElTree>;
   nodeTree: Array<any>[] = [];
-  gltf: any;
+  model?: GLTF;
   modelUrl: string;
-  composer: any;
-  outlinePass: any;
-  constructor(options: { container: HTMLElement; modelUrl?: any }) {
+  composer: EffectComposer | null = null;
+  outlinePass: OutlinePass | null = null;
+  sceneHelper: THREE.Scene;
+  intersects: Array<any> = [];
+  constructor(options: { container: HTMLElement; modelUrl?: any; tree?: any }) {
     this.container = options.container;
-    this.scene = new THREE.Scene();
     this.modelUrl = options.modelUrl;
-    this.camera = new THREE.PerspectiveCamera(
-      45,
-      this.container.clientWidth / this.container.clientHeight,
-      0.1,
-      1000
-    );
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
-    });
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.tree = options.tree;
+    const { scene, camera, renderer, controls } = initScene(this.container);
+    this.scene = scene;
+    this.camera = camera;
+    this.renderer = renderer;
+    this.controls = controls;
     this.composer = new EffectComposer(this.renderer);
-    this.scene.background = new THREE.Color(0xcccccc);
+    this.sceneHelper = new THREE.Scene();
   }
   async init() {
-    this.renderer.setSize(
-      this.container.clientWidth,
-      this.container.clientHeight
-    );
-    this.initControls();
     this.initRaycaster();
-    this.loadEnv();
-    this.addGridHelper();
     this.addOutlinePass();
     useResizeObserver(this.container, () => {
       this.resize();
@@ -54,15 +48,12 @@ export default class ThreeScene {
     window.addEventListener("resize", () => {
       this.resize();
     });
-    this.container.appendChild(this.renderer.domElement);
-    this.gltf = await this.loadModel();
-    this.addLight();
+    this.model = await this.loadModel();
     this.render();
-    if (this.gltf) {
-      this.scene.add(this.gltf.scene);
+    if (this.model) {
+      this.scene.add(this.model.scene);
       return new Promise<any>((resolve) => {
-        console.log(this.outlinePass);
-        resolve({ nodeTree: this.gltf.scenes, outlinePass: this.outlinePass });
+        resolve({ nodeTree: this.model?.scenes });
       });
     } else {
       return new Promise<any>((resolve) => {
@@ -72,23 +63,21 @@ export default class ThreeScene {
   }
   render() {
     requestAnimationFrame((this.render as any).bind(this));
-    this.composer.render();
-  }
-  // 加载灯光
-  addLight() {
-    const light = new THREE.AmbientLight(0xffffff, 1);
-    this.scene.add(light);
+    this.composer?.render();
   }
   // 加载模型
   loadModel(url: string = this.modelUrl) {
     if (url) {
+      const dracoroader = new DRACOLoader();
       const loader = new GLTFLoader();
+      dracoroader.setDecoderPath("/examples/jsm/libs/draco/gltf/");
+      loader.setDRACOLoader(dracoroader);
       return new Promise<any>((resolve, reject) => {
         loader.load(
           url,
-          (gltf: any) => {
+          (model: any) => {
             //模型的包围盒
-            const box3 = new THREE.Box3().setFromObject(gltf.scene);
+            const box3 = new THREE.Box3().setFromObject(model.scene);
             // 获取包围盒中心
             const center = box3.getCenter(new THREE.Vector3());
             // 综合计算出模型的长度值，利用它设置相机位置
@@ -96,8 +85,11 @@ export default class ThreeScene {
             // 设置相机位置
             this.camera.position.set(size, size, size);
             this.camera.lookAt(center);
-            this.nodeTree = gltf.scene.children;
-            resolve(gltf);
+            this.nodeTree = model.scene.children;
+            const { helper } = initHelper(center, model.scene);
+            this.sceneHelper.add(helper.gridHelper);
+            this.scene.add(this.sceneHelper);
+            resolve(model);
           },
           undefined,
           (err) => {
@@ -111,55 +103,51 @@ export default class ThreeScene {
       });
     }
   }
-  // 加入鼠标控制
-  initControls() {
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.25;
-    this.controls.enableZoom = true;
-  }
   // 加入射线点击
   initRaycaster() {
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
-    const dom = this.renderer.domElement;
+    const dom = this.container;
     dom.addEventListener("click", (event) => {
-      const x = (event.clientX / dom.clientWidth) * 2 - 1;
-      const y = -(event.clientY / dom.clientHeight) * 2 + 1;
+      // dom的位置并不是从0开始的 需要转换
+      const rect = dom.getBoundingClientRect();
+      const start = event.clientX - rect.left;
+      const top = event.clientY - rect.top;
+      const x = (start / dom.clientWidth) * 2 - 1;
+      const y = -(top / dom.clientHeight) * 2 + 1;
       mouse.set(x, y);
       raycaster.setFromCamera(mouse, this.camera);
-      const intersects = raycaster.intersectObjects(this.scene.children, true);
-
+      const objects = [];
+      this.scene.traverseVisible((child) => {
+        if (child.type === "Scene") return;
+        if (child.name === "Scene") return;
+        objects.push(child);
+      });
+      this.sceneHelper.traverseVisible((child) => {
+        if (child.name === "picker") {
+          objects.push(child);
+        }
+      });
+      const intersects = raycaster.intersectObjects(objects, true);
+      this.intersects = intersects;
       if (intersects.length > 0) {
-        const object = intersects[0].object;
-        this.setOutlinePass(object);
+        this.setOutlinePass(intersects[0].object);
+        setCheckedNodes(this.tree, intersects[0].object);
       }
     });
   }
   // resize
   resize() {
+    // 窗口宽高比
     this.camera.aspect =
       this.container.clientWidth / this.container.clientHeight;
+    // 更新相机投影矩阵
     this.camera.updateProjectionMatrix();
+    // 重置渲染器的尺寸
     this.renderer.setSize(
       this.container.clientWidth,
       this.container.clientHeight
     );
-  }
-  // loadEnv
-  loadEnv() {
-    const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
-    const env = new RoomEnvironment();
-    this.scene.environment = pmremGenerator.fromScene(env, 0.04).texture;
-  }
-  // add AxesHelper 辅助坐标系
-  addAxesHelper() {
-    const axesHelper = new THREE.AxesHelper(50);
-    this.scene.add(axesHelper);
-  }
-  // addGridHelper 辅助网格
-  addGridHelper() {
-    const gridHelper = new THREE.GridHelper(40, 40);
-    this.scene.add(gridHelper);
   }
   // 模型高光
   addOutlinePass() {
@@ -175,3 +163,103 @@ export default class ThreeScene {
     setSelectedObject(object, this.outlinePass);
   }
 }
+
+const initHelper = (
+  center: THREE.Vector3,
+  model: THREE.Group<THREE.Object3DEventMap>
+) => {
+  const gridHelper = new THREE.GridHelper(30, 30);
+  gridHelper.position.copy(center);
+  gridHelper.position.y = 0;
+  const axesHelper = new THREE.AxesHelper(30);
+  axesHelper.position.copy(center);
+  const boxHelper = new THREE.BoxHelper(model, 0xffff00);
+  return {
+    helper: {
+      gridHelper,
+      axesHelper,
+      boxHelper,
+    },
+  };
+};
+
+const initScene = (container: HTMLElement) => {
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+  // 创建相机
+  const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+  // 渲染器
+  const renderer = new THREE.WebGLRenderer({
+    // 抗锯齿
+    antialias: true,
+    // 透明背景
+    alpha: true,
+  });
+  // HiDPI设备渲染
+  renderer.setPixelRatio(window.devicePixelRatio); // 设置设备像素比
+  renderer.setSize(width, height);
+  container.appendChild(renderer.domElement);
+  // 场景
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xcccccc);
+  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(
+    new RoomEnvironment(),
+    0.04
+  ).texture;
+
+  // 控制器
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true; // 惯性功能
+  controls.enablePan = true; // 右键拖拽
+  controls.enableZoom = true; // 阻尼系数
+  controls.update();
+  // controls.addEventListener("change", () => {
+  //   renderer.render(scene, camera);
+  // })
+
+  // 光源
+  const light = new THREE.AmbientLight(0xffffff, 1);
+  scene.add(light);
+
+  return {
+    camera,
+    renderer,
+    scene,
+    controls,
+  };
+};
+
+const getAnimations = (model: GLTF, mixer: THREE.AnimationMixer) => {
+  const actionsList: Array<THREE.AnimationAction> = [];
+  for (let i = 0; i < model.animations.length; i++) {
+    const action = mixer.clipAction(model.animations[i]);
+    actionsList.push(action);
+  }
+  return actionsList;
+};
+
+const getBoxAndScale = (
+  model: THREE.Group<THREE.Object3DEventMap>,
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls
+) => {
+  const box = new THREE.Box3().setFromObject(model);
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+  const size = box.getSize(new THREE.Vector3()).length();
+  camera.near = size / 100;
+  camera.far = size * 100;
+  camera.updateProjectionMatrix();
+  camera.position.copy(center);
+  camera.position.x += size / 2.0;
+  camera.position.y += size / 5.0;
+  camera.position.z += size / 2.0;
+  camera.lookAt(center);
+  controls.target.copy(center);
+  controls.update();
+  return {
+    box,
+    center,
+    size,
+  };
+};

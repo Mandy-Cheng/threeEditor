@@ -27,7 +27,7 @@ const saveString = (text: any, filename: any) => {
   console.log("导出成功");
 };
 
-export function exportFunc(scene: THREE.Group) {
+export function exportModel(scene: THREE.Group) {
   // 导出模型
   const exporter = new GLTFExporter();
   const options = {
@@ -97,7 +97,7 @@ function setSelectedObject(object: any, outlinePass: any) {
 
 export default function useModel() {
   return {
-    exportFunc,
+    exportFunc: exportModel,
     changeNameByHash,
     moveNodeGroupByName,
     addGroup,

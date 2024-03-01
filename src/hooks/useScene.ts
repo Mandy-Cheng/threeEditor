@@ -2,17 +2,23 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { useResizeObserver } from "@vueuse/core";
 import { OutlinePass, RoomEnvironment } from "three/examples/jsm/Addons.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import emitter from "@/utils/emitter.ts";
 import useComposer from "@/hooks/useComposer.ts";
 import useModel from "@/hooks/useModel.ts";
 import useTree from "@/hooks/useTree.ts";
+// import useGui from "@/hooks/useGui.ts";
+import useAnimation from "@/hooks/useAnimation.ts";
 const { outlinePass } = useComposer();
 const { setSelectedObject } = useModel();
 const { setCheckedNodes } = useTree();
-
+// const { gui, createCameraInteractor } = useGui();
+const { modelRotate, modelScale, createCameraAnimation } = useAnimation();
+const url = `${import.meta.env.VITE_PUBLIC_PATH}draco/`;
+const dracoDecoderPath = new URL(url, import.meta.url).href;
 export default class ThreeScene {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
@@ -20,7 +26,6 @@ export default class ThreeScene {
   controls: OrbitControls;
   container: HTMLElement;
   tree?: InstanceType<typeof ElTree>;
-  nodeTree: Array<any>[] = [];
   model?: GLTF;
   modelUrl: string;
   composer: EffectComposer | null = null;
@@ -38,6 +43,7 @@ export default class ThreeScene {
     this.controls = controls;
     this.composer = new EffectComposer(this.renderer);
     this.sceneHelper = new THREE.Scene();
+    this.sceneHelper.name = "SceneHelper";
   }
   async init() {
     this.initRaycaster();
@@ -51,28 +57,28 @@ export default class ThreeScene {
     this.model = await this.loadModel();
     this.render();
     if (this.model) {
-      this.scene.add(this.model.scene);
       return new Promise<any>((resolve) => {
-        resolve({ nodeTree: this.model?.scenes });
+        resolve({ scene: this.scene });
       });
     } else {
       return new Promise<any>((resolve) => {
-        resolve({ nodeTree: [] });
+        resolve({ scene: this.scene });
       });
     }
   }
   render() {
     requestAnimationFrame((this.render as any).bind(this));
+    // this.renderer.render(this.scene, this.camera);
     this.composer?.render();
   }
   // 加载模型
   loadModel(url: string = this.modelUrl) {
     if (url) {
-      const dracoroader = new DRACOLoader();
-      const loader = new GLTFLoader();
-      dracoroader.setDecoderPath("/examples/jsm/libs/draco/gltf/");
-      loader.setDRACOLoader(dracoroader);
       return new Promise<any>((resolve, reject) => {
+        const dracoLoader = new DRACOLoader();
+        dracoLoader.setDecoderPath(dracoDecoderPath);
+        const loader = new GLTFLoader();
+        loader.setDRACOLoader(dracoLoader);
         loader.load(
           url,
           (model: any) => {
@@ -81,17 +87,28 @@ export default class ThreeScene {
             // 获取包围盒中心
             const center = box3.getCenter(new THREE.Vector3());
             // 综合计算出模型的长度值，利用它设置相机位置
-            const size = box3.getSize(new THREE.Vector3()).length();
+            const size = box3.getSize(new THREE.Vector3());
+            const diagonal = size.length(); // 对角线长度
+            const scaleRatio = Math.min(
+              this.container.clientWidth / size.x,
+              this.container.clientHeight / size.y
+            );
             // 设置相机位置
-            this.camera.position.set(size, size, size);
+            model.scene.scale.set(0.1, 0.1, 0.1);
+            // 设置相机位置
+            this.camera.position.set(diagonal, diagonal, diagonal);
             this.camera.lookAt(center);
-            this.nodeTree = model.scene.children;
-            const { helper } = initHelper(center, model.scene);
-            this.sceneHelper.add(helper.gridHelper);
-            this.scene.add(this.sceneHelper);
+
+            model.scene.name = "Model";
+            this.scene.add(model.scene);
+            modelScale(model.scene, scaleRatio);
+            // modelRotate(model.scene, "y", -Math.PI / 4);
+            // modelRotate(model.scene, "x", Math.PI / 9);
             resolve(model);
           },
-          undefined,
+          (xhr: ProgressEvent) => {
+            // console.log((xhr.loaded / xhr.total) * 100 + "% loaded");
+          },
           (err) => {
             reject(err);
           }
@@ -119,8 +136,6 @@ export default class ThreeScene {
       raycaster.setFromCamera(mouse, this.camera);
       const objects = [];
       this.scene.traverseVisible((child) => {
-        if (child.type === "Scene") return;
-        if (child.name === "Scene") return;
         objects.push(child);
       });
       this.sceneHelper.traverseVisible((child) => {
@@ -132,7 +147,7 @@ export default class ThreeScene {
       this.intersects = intersects;
       if (intersects.length > 0) {
         this.setOutlinePass(intersects[0].object);
-        setCheckedNodes(this.tree, intersects[0].object);
+        emitter.emit("selectNode", intersects[0].object);
       }
     });
   }
@@ -165,20 +180,24 @@ export default class ThreeScene {
 }
 
 const initHelper = (
-  center: THREE.Vector3,
-  model: THREE.Group<THREE.Object3DEventMap>
+  center: THREE.Vector3 = new THREE.Vector3(0, 0, 0),
+  model?: THREE.Group<THREE.Object3DEventMap>
 ) => {
   const gridHelper = new THREE.GridHelper(30, 30);
+  gridHelper.name = "gridHelper";
   gridHelper.position.copy(center);
   gridHelper.position.y = 0;
   const axesHelper = new THREE.AxesHelper(30);
+  axesHelper.name = "axesHelper";
   axesHelper.position.copy(center);
-  const boxHelper = new THREE.BoxHelper(model, 0xffff00);
+  if (model) {
+    const boxHelper = new THREE.BoxHelper(model, 0xffff00);
+    boxHelper.name = "boxHelper";
+  }
   return {
     helper: {
       gridHelper,
       axesHelper,
-      boxHelper,
     },
   };
 };
@@ -187,13 +206,14 @@ const initScene = (container: HTMLElement) => {
   const width = container.clientWidth;
   const height = container.clientHeight;
   // 创建相机
-  const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+  const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 10000);
   // 渲染器
   const renderer = new THREE.WebGLRenderer({
     // 抗锯齿
     antialias: true,
     // 透明背景
     alpha: true,
+    logarithmicDepthBuffer: true, // 对数深度缓冲 模型闪烁
   });
   // HiDPI设备渲染
   renderer.setPixelRatio(window.devicePixelRatio); // 设置设备像素比
@@ -201,6 +221,7 @@ const initScene = (container: HTMLElement) => {
   container.appendChild(renderer.domElement);
   // 场景
   const scene = new THREE.Scene();
+  scene.name = "Scene";
   scene.background = new THREE.Color(0xcccccc);
   scene.environment = new THREE.PMREMGenerator(renderer).fromScene(
     new RoomEnvironment(),
@@ -209,16 +230,21 @@ const initScene = (container: HTMLElement) => {
 
   // 控制器
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true; // 惯性功能
-  controls.enablePan = true; // 右键拖拽
   controls.enableZoom = true; // 阻尼系数
+  controls.mouseButtons = {
+    LEFT: THREE.MOUSE.PAN, // 左键拖拽
+    MIDDLE: THREE.MOUSE.DOLLY, // 滑轮滚动
+    RIGHT: THREE.MOUSE.ROTATE, // 右键旋转
+  };
   controls.update();
-  // controls.addEventListener("change", () => {
-  //   renderer.render(scene, camera);
-  // })
+  controls.addEventListener("change", () => {
+    // console.log(controls.target);
+    // console.log(camera.position);
+  });
 
   // 光源
   const light = new THREE.AmbientLight(0xffffff, 1);
+  light.name = light.type;
   scene.add(light);
 
   return {
@@ -243,23 +269,58 @@ const getBoxAndScale = (
   camera: THREE.PerspectiveCamera,
   controls: OrbitControls
 ) => {
-  const box = new THREE.Box3().setFromObject(model);
-  const center = new THREE.Vector3();
-  box.getCenter(center);
-  const size = box.getSize(new THREE.Vector3()).length();
-  camera.near = size / 100;
-  camera.far = size * 100;
-  camera.updateProjectionMatrix();
-  camera.position.copy(center);
-  camera.position.x += size / 2.0;
-  camera.position.y += size / 5.0;
-  camera.position.z += size / 2.0;
-  camera.lookAt(center);
-  controls.target.copy(center);
-  controls.update();
+  const box = new THREE.Box3().setFromObject(model); // 获取模型的包围盒
+  const center = box.getCenter(new THREE.Vector3()); // 获取包围盒中心
+  const size = box.getSize(new THREE.Vector3()); // 模型的长度值
+  const scale = Math.max(size.x, size.y, size.z); // 缩放比例
+  // 中心点三维向量 放大值
+  const centerWithScale = center.clone().multiplyScalar(scale);
+  // 盒子的放大值
+  const sizeWithScale = size.clone().multiplyScalar(scale);
+  // 模型缩放
+  model.scale.set(scale, scale, scale);
+  // 相机位置初始位置 缩放值
+  camera.position.copy(sizeWithScale);
+  // controls
+  controls.target.copy(centerWithScale);
+
   return {
-    box,
-    center,
-    size,
+    box: { scale, sizeWithScale, centerWithScale },
   };
+};
+
+const cameraFlyAnimation = (camera: THREE.PerspectiveCamera, target: OrbitControls) => {
+  const endPos = new THREE.Vector3(0, 0, 0);
+  const endTarget = new THREE.Vector3(10, 10, 10);
+  createCameraAnimation(camera, target, endPos, endTarget);
+};
+
+const dispose = (scene: THREE.Scene) => {
+  scene.traverse((object) => {
+    if (object instanceof THREE.Mesh) {
+      if (object.geometry) {
+        object.geometry.dispose();
+      }
+      if (object.material) {
+        if (Array.isArray(object.material)) {
+          object.material.forEach((material) => material.dispose());
+        } else {
+          object.material.dispose();
+        }
+      }
+    }
+  });
+  if (scene.background instanceof THREE.Texture) {
+    scene.background.dispose();
+  }
+  scene.clear();
+};
+
+export {
+  initScene,
+  getAnimations,
+  getBoxAndScale,
+  cameraFlyAnimation,
+  dispose,
+  initHelper,
 };

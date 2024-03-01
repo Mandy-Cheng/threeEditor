@@ -1,4 +1,4 @@
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+// import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 function saveModelToIndexDb(modelName: string, modelData: any) {
   return new Promise((resolve, reject) => {
@@ -45,12 +45,12 @@ function getModelFromIndexDb(modelName: string) {
       const request = objectStore.get(modelName);
       request.onsuccess = (event: any) => {
         const modelData = event.target.result?.model;
-        const loader = new GLTFLoader();
+        // const loader = new GLTFLoader();
         if (modelData?.raw) {
           const url = window.URL.createObjectURL(modelData?.raw);
-          loader.load(url, (gltf: any) => {
+          // loader.load(url, (gltf: any) => {
             resolve(url);
-          });
+          // });
         }
       };
       request.onerror = (event: any) => {

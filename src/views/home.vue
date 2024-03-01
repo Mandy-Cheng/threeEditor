@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ThreeScene from "@/hooks/useScene";
+import { cameraFlyAnimation } from "@/hooks/useScene";
 import useIndexedDB from "@/hooks/useIndexDb";
 const treeData = ref<any>([]);
 const containerRef = ref<any>(null);
@@ -14,19 +15,23 @@ async function init() {
       modelUrl: gltf,
       tree: treePanelRef.value?.treeRef,
     });
-    const { nodeTree } = await threeScene.init();
-    treeData.value = nodeTree;
+    const { scene } = await threeScene.init();
+    treeData.value = [scene];
   } else {
     console.log("没有模型");
   }
 }
 
-function select(node: any) {
-  threeScene?.setOutlinePass(node);
+function cameraMove() {
+  cameraFlyAnimation(threeScene.camera, threeScene.controls);
 }
 
 onMounted(async () => {
   init();
+});
+
+onBeforeUnmount(() => {
+  threeScene.dispose();
 });
 </script>
 
@@ -34,15 +39,20 @@ onMounted(async () => {
   <div class="flex-row-1 h-100vh">
     <div class="flex-column-2 w-25% b-r b-coolGray h-full">
       <sc-upload @load="init"></sc-upload>
-      <sc-tree
+      <sc-panel
         :treeData="treeData"
-        @select="select"
+        :scene="threeScene"
         ref="treePanelRef"
-      ></sc-tree>
+      ></sc-panel>
     </div>
     <div class="w-75% h-100vh">
       <div id="three_container" ref="containerRef" class="w-100% h-100vh"></div>
     </div>
+  </div>
+  <div class="absolute left-35% top-0px p-10px">
+    <el-button type="primary" @click="cameraMove" class="mb-10px"
+      >camerMove</el-button
+    >
   </div>
 </template>
 

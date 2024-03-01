@@ -4,6 +4,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { FXAAShader } from "three/examples/jsm/shaders/FXAAShader.js";
+import { GammaCorrectionShader } from "three/examples/jsm/shaders/GammaCorrectionShader.js";
 
 function outlinePass(
   scene: any,
@@ -37,9 +38,13 @@ function outlinePass(
   );
   //  设置是否渲染到屏幕
   effectFXAA.renderToScreen = true;
+;
+  //  伽马校正
+  const gammaPass = new ShaderPass(GammaCorrectionShader);
   composer.addPass(outlinePass);
-  composer.addPass(outputPass);
+  // composer.addPass(outputPass);
   composer.addPass(effectFXAA);
+  composer.addPass(gammaPass);
   composer.setSize(container.clientWidth, container.clientHeight);
   return outlinePass;
 }

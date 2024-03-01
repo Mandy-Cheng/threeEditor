@@ -3,41 +3,6 @@
     vertical
     class="p-y-20px p-x-10px box-border w-full w-min-300px zIndex-999"
   >
-    <div class="h-150px b-b-1px b-#dcdfe6 b-b-dashed pb-10px">
-      <el-scrollbar>
-        <div class="flex-row-46">
-          <div>
-            <n-dynamic-input
-              v-model:value="hash"
-              preset="pair"
-              key-placeholder="材料名称"
-              value-placeholder="修改名称"
-              size="mini"
-            />
-          </div>
-          <div>
-            <el-button
-              type="primary"
-              @click="changeByHash"
-              class="ml-10px mb-10px"
-              >ChangeName</el-button
-            >
-            <el-button type="primary" @click="add" class="mb-10px"
-              >addGroup</el-button
-            >
-            <el-button type="primary" @click="moveNodeByHash" class="mb-10px"
-              >move</el-button
-            >
-            <el-button type="primary" @click="exportMethod" class="mb-10px"
-              >export</el-button
-            >
-            <el-button type="primary" @click="resetTree" class="mb-10px"
-              >reset</el-button
-            >
-          </div>
-        </div>
-      </el-scrollbar>
-    </div>
     <el-input v-model="pattern" placeholder="搜索">
       <template #prepend>
         <el-select
@@ -76,22 +41,20 @@
         </el-tree>
       </el-scrollbar>
     </div>
-    <sc-property :property="currentNode" />
   </n-space>
 </template>
 <script lang="ts" setup>
 import { withModifiers } from "vue";
 import type { TreeNodeData } from "element-plus/es/components/tree/src/tree.type";
 import { get } from "@runafe/platform-share";
-import useModel from "../hooks/useModel";
 import {
   EyeOutline,
   EyeOffOutline,
   ArrowUp,
   TrashOutline,
 } from "@vicons/ionicons5";
-const { changeNameByHash, moveNodeGroupByName, addGroup, exportFunc } =
-  useModel();
+import emitter from "@/utils/emitter.ts";
+
 const props = withDefaults(
   defineProps<{
     treeData: THREE.Group[];
@@ -99,12 +62,11 @@ const props = withDefaults(
   }>(),
   { treeData: () => [], outlinePass: () => {} }
 );
-const emit = defineEmits(["select"]);
+
 const treeRef = ref<InstanceType<typeof ElTree>>();
 const defaultExpandedKeys = ref<number[]>([]);
 let treeDataIn = toRef(props, "treeData");
-let treeDataOrigin = [] as THREE.Group[];
-const currentNode = ref<TreeNodeData[]>([]);
+const currentNode = ref<TreeNodeData>({});
 const filterType = ref("1");
 const pattern = ref("");
 
@@ -160,23 +122,25 @@ const renderLabel = (
     },
     h("span", { innerHTML: createLabel(data) }),
     h("div", { class: "flex-row-46" }, [
-      data.name === "Scene"
+      data.parent === null
         ? null
         : [
-            h(
-              ElIcon,
-              {
-                class: "mr-10px",
-                color: "#4194fc",
-                onClick: withModifiers(
-                  () => moveTop(data),
-                  ["stop", "prevent"]
-                ),
-              },
-              {
-                default: () => h(ArrowUp),
-              }
-            ),
+            data.parent.name === "Model"
+              ? h(
+                  ElIcon,
+                  {
+                    class: "mr-10px",
+                    color: "#4194fc",
+                    onClick: withModifiers(
+                      () => moveTop(data),
+                      ["stop", "prevent"]
+                    ),
+                  },
+                  {
+                    default: () => h(ArrowUp),
+                  }
+                )
+              : null,
             h(
               ElIcon,
               {
@@ -210,29 +174,6 @@ const renderLabel = (
   );
 };
 
-const hash = ref([
-  {
-    key: "dingmian",
-    value: "顶面",
-  },
-  {
-    key: "dimian",
-    value: "地面",
-  },
-  {
-    key: "shuini",
-    value: "外墙",
-  },
-  {
-    key: "boli",
-    value: "窗",
-  },
-  {
-    key: "caopi",
-    value: "草皮",
-  },
-]);
-
 const deleteNode = (data: TreeNodeData) => {
   treeRef.value?.remove(data.id);
 };
@@ -256,46 +197,32 @@ const selectChange = () => {
   pattern.value = "";
 };
 
-const changeByHash = () => {
-  changeNameByHash(hash.value, treeDataIn.value[0]);
-};
-
-const resetTree = () => {
-  console.log("reset");
-  treeDataIn.value = treeDataOrigin;
-};
-
 const handleNodeClick = (data: TreeNodeData) => {
-  currentNode.value = [data];
-  console.log("select", data);
-  emit("select", data);
+  currentNode.value = data;
 };
 
 const setCheckedNodes = (node: TreeNodeData) => {
-  currentNode.value = [node];
-};
-
-const moveNodeByHash = () => {
-  // 提取hash每一项的value成数组
-  const names = hash.value.map((item) => item.value);
-  names.forEach((name) => {
-    moveNodeGroupByName(name, "Node", treeDataIn.value[0]);
+  treeRef.value?.setCurrentKey(node.id.toString());
+  currentNode.value = treeRef.value?.getCurrentNode() as TreeNodeData;
+  nextTick(() => {
+    setTimeout(() => {
+      const cur = document.getElementById(node.id.toString());
+      console.log(cur);
+      if (cur) {
+        cur.scrollIntoView({ block: "center" }); // 通过scrollIntoView方法将对应的dom元素定位到可见区域 【block: 'center'】这个属性是在垂直方向居中显示
+      }
+    }, 500);
   });
 };
-
-const exportMethod = () => {
-  exportFunc(treeDataIn.value[0]);
-};
-
-const add = () => {
-  addGroup("Node", treeDataIn.value[0]);
-};
-
 // 置顶
 const moveTop = (data: any) => {
   treeRef.value?.remove(data.id);
   treeDataIn.value[0].children.unshift(data);
 };
+
+emitter.on("selectNode", (node: any) => {
+  setCheckedNodes(node);
+});
 
 watch(pattern, (val) => {
   treeRef.value!.filter(val);
@@ -311,6 +238,7 @@ watch(
 defineExpose({
   treeRef,
   setCheckedNodes,
+  currentNode,
 });
 </script>
 <style scoped>

@@ -19,7 +19,9 @@ declare module 'vue' {
     NSpace: typeof import('naive-ui')['NSpace']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    ScPanel: typeof import('./components/ScPanel.vue')['default']
     ScProperty: typeof import('./components/ScProperty.vue')['default']
+    ScTools: typeof import('./components/ScTools.vue')['default']
     ScTree: typeof import('./components/ScTree.vue')['default']
     ScUpload: typeof import('./components/ScUpload.vue')['default']
   }
